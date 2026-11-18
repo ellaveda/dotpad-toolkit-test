@@ -1,3 +1,5 @@
+//adapted from cada11y -- may need viewer.js and tutorial.js too?
+
 import { DotPadSDK, DotPadScanner, DataCodes, DisplayMode } from '/DotPadSDK-3.0.0.js';
 
 const SERVER_URL = window.location.origin;
