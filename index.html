@@ -199,6 +199,7 @@
   // Each puzzle cell expands to (cellW × cellH) Dot Pad cells based on puzzle size
   function renderPuzzleAsGraphicHex() {
     const cells = new Array(DP_W * DP_H).fill(0);
+  }
   // ============================================================
   // DOT PAD CONNECT
   // ============================================================
@@ -269,8 +270,8 @@
       render();
     }
   }
-    function render(){
-      dpSetBlock(new Array(60 * 40).fill(0x09), 10, 10, 60, 40, 0x12)
-    }
+  function render(){
+    dpSetBlock(new Array(60 * 40).fill(0x09), 10, 10, 60, 40, 0x12)
+  }
   </script>
 </html>
