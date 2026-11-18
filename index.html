@@ -182,38 +182,6 @@
     } catch(e) { console.warn('[DotPad] text push failed:', e); }
   }
 
-  // ============================================================
-  // 텍스트 라인 (20 cells = ~20 chars) status 생성
-  // ============================================================
-  function renderStatusText() {
-    if (state.screen === 'launcher') return 'DotPuzzle';
-    if (state.screen === 'sudoku') {
-      const s = state.sudoku;
-      const v = s.grid[s.cursor.r][s.cursor.c];
-      return 'R' + (s.cursor.r+1) + 'C' + (s.cursor.c+1) + ' ' + (v || '-');
-    }
-    if (state.screen === 'minesweeper') {
-      const s = state.minesweeper;
-      let st;
-      if (s.revealed[s.cursor.r][s.cursor.c]) {
-        const v = s.grid[s.cursor.r][s.cursor.c];
-        st = v === -1 ? 'mine' : v === 0 ? 'safe' : ('n' + v);
-      } else st = s.flagged[s.cursor.r][s.cursor.c] ? 'flag' : 'hide';
-      return 'R' + (s.cursor.r+1) + 'C' + (s.cursor.c+1) + ' ' + st;
-    }
-    if (state.screen === 'nonogram') {
-      const s = state.nonogram;
-      const v = s.state[s.cursor.r][s.cursor.c];
-      const st = v === 1 ? 'fill' : v === 2 ? 'x' : 'mt';
-      return 'R' + (s.cursor.r+1) + 'C' + (s.cursor.c+1) + ' ' + st;
-    }
-    if (state.screen === 'maze') {
-      const s = state.maze;
-      return 'R' + (s.player.r+1) + 'C' + (s.player.c+1) + (s.won ? ' WIN' : '');
-    }
-    return '';
-  }
-  window.renderStatusText = renderStatusText;
 
 
   // ============================================================
@@ -301,5 +269,8 @@
       render();
     }
   }
+    function render(){
+      dpSetBlock(new Array(60 * 40).fill(0x09), 10, 10, 60, 40, 0x12)
+    }
   </script>
 </html>
