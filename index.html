@@ -16,16 +16,16 @@
       <!-- new connection - from baekjunjoo's dotpuzzle -->
       <h2>Connect to DotPad:</h2>
       <div class="connect-options">
-        <button type= "button" class="connect-btn" onclick="connectBle()" type="button" aria-label="Connect via Bluetooth, wireless BLE">Bluetooth</button>
-        <button type = "button" class="connect-btn" onclick="connectUsb()" type="button" aria-label="Connect via USB cable, wired">USB</button>
+        <button type="button" class="connect-btn" onclick="handleSelectBleDevice()" type="button" aria-label="Connect via Bluetooth, wireless BLE">Bluetooth</button>
+        <button type="button" class="connect-btn" onclick="handleSelectUsbDevice()" type="button" aria-label="Connect via USB cable, wired">USB</button>
       </div>
     </div>
   </body>
 
-  <script type="module"> 
-    // Dot Pad Web SDK 3.0.0 — adapted from baekjunjoo's dotpuzzle
+  <script> //adapted from the dotpad sdk guide but typescript --> javascript for faster browser time
+    // Device interface (USB: target = SerialPort, BLE: target = BluetoothDevice)
     try {
-      const { DotPadSDK, DotPadScanner, DisplayMode, DataCodes, KeyCodes }
+      const { DotPadSDK, DotPadScanner, DotDevice, DataCodes, KeyCodes, DisplayMode}
         = await import('./DotPadSDK-3.0.0.js');
       window.DotPad = {
         sdk: new DotPadSDK(),
@@ -37,241 +37,160 @@
       console.error('[DotPad] SDK load failed:', err);
       window._dotpadLoadError = err.message || String(err);
     }
-  </script>
 
-  <script>
-  // ============================================================
-  // STATE - adopted from baekjunjoo's dotpuzzel
-  // ============================================================
-  const state = {
-    screen: 'div-btn',
-    dotpadConnected: false,
-    dotpadDevice: null,
-    dotpadName: '',
-    dotpadCursor: 0,
-  };
-  // ============================================================
-  // DOT PAD GEOMETRY (v0.4 — full-pad rendering)
-  // 그래픽 영역: 30 cells wide × 10 cells tall = 300 cells × 8 dots = 2400 dots
-  // 텍스트 라인: 20 cells separate (grade-1 ASCII braille)
-  // ============================================================
-  const DP_W = 30, DP_H = 10, DP_TEXT_CELLS = 20;
+    export default function DotPad() {
+      // Constants for full graphic and text output
+      const CELL300_GRAPHIC_FULL = "0002200002200002200002200042f22f24000220000220000220000220000009900009900009900009900009f88f9000099000099000099000099000000440000440000440404e400004f00f40000440000440000440000440000002200002200002200002200002f00f2000022000022020272000022000888998888998888998888998888df88f988889988889988889988889a88c111991111991111991111991111bf11f91111991111991111991111951130004400004400004400004400004f00f40000440000440000440000440000002200002200002200002200002f00f20000a20000220000220000220000009900009900009900009d80809f00f90101b90000990000990000990000004400004400004400004500004f00f4000044000044000044000044000";
+      const CELL300_TEXT_FULL = "E000041D380419080000000000000000000000000000000000000000000080A00000204484204400A0006080040420004400000000000000000000000000010808000108000808010008000900000100000000000000000000002008031130010530031538010000040110021130010E00021C000000000060800400200000A004C420408480000000000000000000000000000000000008000000000000000100000000000000000000000000000000000000001538012220040E18061708011100000E0801170802220000000000000000C48000A4A04400204484A00084A00084A0046400006400000000000000000100000000010000000008010008000108000800000900000000000000003230031710010328041E18050018003D00002000041D3804000000000000"//"000000000008800888800080000808000000000008800008000808800008000010000010000111100001100011000010000001100100100001100010000040000024000040000006200406200400000400200642400600000000000000800808800800000000000000000000000000000000000000000000000000100000000100000000000000000000000000000000000000000000000040000066200464000040600042600042000040200642200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+      const CELL300_GRAPHIC_PARTIAL = "C0FCCF0C";
+      const CELL300_TEXT_PARTIAL = "312536";
+      const CELL20_TEXT_SHORT = "19151E";
+      const CELL20_TEXT_FULL = "19151E001E15190019151E001E15190019151E001E15190019151E001E151900";
 
-  // puzzle NxN → cellW × cellH (Dot Pad cells per puzzle cell), with offset to center
-  function dpLayout(N, fillHeight) {
-    // fillHeight=true → stretch vertically too (Nonogram/Sudoku); else proportional
-    const cellW = Math.max(1, Math.min(8, Math.floor(DP_W / N)));
-    let cellH;
-    if (N <= 10) {
-      cellH = Math.max(1, Math.min(cellW, Math.floor(DP_H / N)));
-      // For square-ish puzzles, prefer matching cellH ≤ cellW since Dot Pad cells are taller (2x4)
-    } else {
-      cellH = 1; // viewport mode
-    }
-    const totalW = cellW * N;
-    const totalH = cellH * Math.min(N, DP_H);
-    const offsetX = Math.floor((DP_W - totalW) / 2);
-    const offsetY = Math.floor((DP_H - totalH) / 2);
-    return { cellW, cellH, offsetX, offsetY };
-  }
+      const device = {
+        target: null, // SerialPort (USB) or BluetoothDevice (BLE)
+        name: null,
+        connectionType: null,
+        connected: false,
+        connectDevice: DotDevice | null,
+      }
 
-  // Place a block at cell (col, row) of size (cellW, cellH) using a pattern
-  // pattern can be: number (uniform), or 2D array [dy][dx] of bytes
-  function dpSetBlock(cells, col, row, cellW, cellH, pattern) {
-    for (let dy = 0; dy < cellH; dy++) {
-      for (let dx = 0; dx < cellW; dx++) {
-        const c = col + dx, r = row + dy;
-        if (c < 0 || c >= DP_W || r < 0 || r >= DP_H) continue;
-        let v;
-        if (typeof pattern === 'number') v = pattern;
-        else if (pattern[dy] && pattern[dy][dx] !== undefined) v = pattern[dy][dx];
-        else v = 0;
-        cells[r * DP_W + c] = v & 0xFF;
+      const dotpadsdk = new DotPadSDK();
+      const dotpadscanner = new DotPadScanner();
+      //ella note -- less certain about these constants:
+      const [devices, setDevices] = useState<Device>([]);
+      /** BLE는 동시에 하나의 GATT 연산만 허용 → 연결 중인 디바이스 키 (연결 완료 시 초기화) */ //<-- Allows only one GATT operation at a time → Connected device key (initialized upon connection completion)
+      const [connectingKey, setConnectingKey] = useState<string | null>(null);
+      const deviceKey = null; //TODO: add meaningful value
+
+      useEffect(() => {
+        dotpadsdk.current = new DotPadSDK();
+        dotpadscanner.current = new DotPadScanner();
+      }, []);
+
+      // Function to update device connection information
+      const updateDeviceConnection = async (device, connected) => {
+        if (connected) {
+          const key = deviceKey(device);
+          if (connectingKey) return; // 이미 다른 디바이스 연결 중 <-- already connected to another device
+          setConnectingKey(key);
+          try {
+            const connectDevice = device.connectionType === 'ble'
+              ? await dotpadsdk.current?.connectBleDevice(device)
+              : await dotpadsdk.current?.connectUsbDevice(device);
+            if (connectDevice) {
+              setDevices(devices => devices.map(d => (d.name === device.name && d.connectionType === device.connectionType) ? { ...d, connected, connectDevice } : d));
+              dotpadsdk.current?.setCallBack(dotpadMessageCallBack, dotpadKeyCallback);
+            }
+          } finally {
+            setConnectingKey(null);
+          }
+        } else {
+          dotpadsdk.current?.disconnect(device.connectDevice ?? null);
+          setDevices(devices => devices.map(d => (d.name === device.name && d.connectionType === device.connectionType) ? { ...d, connected, connectDevice: null } : d));
+        }
+      };
+
+      // Function to select a DotPad device (USB)
+      const handleSelectUsbDevice = async () => {
+        const device = await dotpadscanner.current?.startUsbScan();
+        if (device) {
+          const deviceInfo = {
+            target: device,
+            name: device.name ?? 'USB DotPad',
+            connectionType: 'usb',
+            connected: false,
+            connectDevice: null
+          };
+          setDevices(currentDevices => [...currentDevices, deviceInfo]);
+        }
+      };
+
+      // Function to select a DotPad device (BLE)
+      const handleSelectBleDevice = async () => {
+        const device = await dotpadscanner.current?.startBleScan();
+        if (device) {
+          const deviceInfo = {
+            target: device,
+            name: device.name ?? 'BLE DotPad',
+            connectionType: 'ble',
+            connected: false,
+            connectDevice: null
+          };
+          setDevices(currentDevices => [...currentDevices, deviceInfo]);
+        }
+      };
+
+      // Function to print full graphic area (300 cells) - all devices
+      const handleCell300FullPrint = async (hexData, displayMode) => {
+          dotpadsdk.current?.displayGraphicData(hexData, null, displayMode);
+      };
+
+      // Function to print a portion of the graphic area (300 cells) - all devices
+      const handleCell300PartialPrint = async (lineId, cellIndex, hexData, displayMode = DisplayMode.GraphicMode) => {
+          dotpadsdk.current?.displayLineData(lineId, cellIndex, hexData, displayMode);
+      };
+
+      // Function to reset the graphic area (300 cells) - all devices
+      const handleCell300Reset = async () => {
+          dotpadsdk.current?.displayGraphicData("00".repeat(300));
+      };
+
+      // Function to print the text area (20 cells) - all devices
+      const handleCell20Print = async (hexData) => {
+          dotpadsdk.current?.displayTextData(hexData);
+      };
+
+      // Function to reset the text area (20 cells) - all devices
+      const handleCell20Reset = async () => {
+          dotpadsdk.current?.displayTextData("00".repeat(20));
+      };
+
+      // Individual device functions
+      const handleDeviceCell300FullPrint = async (device, hexData, displayMode) => {
+        if (device.connectDevice) {
+          dotpadsdk.current?.displayGraphicData(hexData, device.connectDevice, displayMode);
+        }
+      };
+
+      const handleDeviceCell300PartialPrint = async (device, lineId, cellIndex, hexData) => {
+        if (device.connectDevice) {
+          dotpadsdk.current?.displayLineData(lineId, cellIndex, hexData, DisplayMode.GraphicMode, device.connectDevice);
+        }
+      };
+
+      const handleDeviceCell300Reset = async (device) => {
+        if (device.connectDevice) {
+          dotpadsdk.current?.displayGraphicData("00".repeat(300), device.connectDevice);
+        }
+      };
+
+      const handleDeviceCell20Print = async (device, hexData) => {
+        if (device.connectDevice) {
+          dotpadsdk.current?.displayTextData(hexData, device.connectDevice);
+        }
+      };
+
+      const handleDeviceCell20Reset = async (device) => {
+        if (device.connectDevice) {
+          dotpadsdk.current?.displayTextData("00".repeat(20), device.connectDevice);
+        }
+      };
+
+      // DotPad function key callback
+      const dotpadKeyCallback = (device, keyCode, keyMsg) => {
+        console.log("=> dotpad key code : " + keyCode + " msg : " + keyMsg);
+      }
+
+      const dotpadMessageCallBack = (device, dataCode, msg) => {
+        switch (dataCode) {
+          case DataCodes.Disconnected : {
+            setDevices(devices => devices.map(d => d.connectDevice === device ? { ...d, connected: false, connectDevice: null } : d));
+          } break;
+        }
+
+        console.log("" + dataCode + " : " + msg)
       }
     }
-  }
-
-  // Outline a block (perimeter dots) — used for cursor
-  function dpOutline(cells, col, row, cellW, cellH, val) {
-    if (cellW <= 1 && cellH <= 1) {
-      // Single cell — set whole cell
-      const c = col, r = row;
-      if (c >= 0 && c < DP_W && r >= 0 && r < DP_H) cells[r * DP_W + c] |= val;
-      return;
-    }
-    // Top + bottom rows
-    for (let dx = 0; dx < cellW; dx++) {
-      const c = col + dx;
-      if (c < 0 || c >= DP_W) continue;
-      if (row >= 0 && row < DP_H) cells[row * DP_W + c] |= 0x09; // dots 1+4 (top)
-      const rb = row + cellH - 1;
-      if (rb >= 0 && rb < DP_H && rb !== row) cells[rb * DP_W + c] |= 0x24; // dots 3+6 (bottom)
-    }
-    // Left + right columns
-    for (let dy = 0; dy < cellH; dy++) {
-      const r = row + dy;
-      if (r < 0 || r >= DP_H) continue;
-      const cl = col;
-      if (cl >= 0 && cl < DP_W) cells[r * DP_W + cl] |= 0x07; // dots 1+2+3 (left col)
-      const cr = col + cellW - 1;
-      if (cr >= 0 && cr < DP_W && cr !== cl) cells[r * DP_W + cr] |= 0x38; // dots 4+5+6 (right col)
-    }
-  }
-
-  // Convert dot-state byte (graphics: 6 bits dot1-6 + 2 extra dots 7-8) to hex string
-  function dpCellsToHex(cells) {
-    let hex = '';
-    for (let i = 0; i < DP_W * DP_H; i++) {
-      hex += (cells[i] & 0xFF).toString(16).padStart(2, '0').toUpperCase();
-    }
-    return hex;
-  }
-
-  // ============================================================
-  // ASCII → Grade-1 braille hex (for 20-cell text line)
-  // ============================================================
-  const BRL_LETTER = {
-    a:0x01, b:0x03, c:0x09, d:0x19, e:0x11, f:0x0B, g:0x1B, h:0x13, i:0x0A, j:0x1A,
-    k:0x05, l:0x07, m:0x0D, n:0x1D, o:0x15, p:0x0F, q:0x1F, r:0x17, s:0x0E, t:0x1E,
-    u:0x25, v:0x27, w:0x3A, x:0x2D, y:0x3D, z:0x35,
-  };
-  const BRL_PUNCT = { ' ':0x00, '.':0x32, ',':0x02, '-':0x24, '/':0x0C, ':':0x12, ';':0x06, '?':0x26, '!':0x16, '=':0x3F };
-  const BRL_NUMERIC_PREFIX = 0x3C;
-  const BRL_CAPITAL_PREFIX = 0x20;
-
-  function asciiToBrailleHex(text, maxCells) {
-    let cells = [];
-    let numericMode = false;
-    for (const ch of text) {
-      if (cells.length >= maxCells) break;
-      if (ch >= '0' && ch <= '9') {
-        if (!numericMode) { cells.push(BRL_NUMERIC_PREFIX); numericMode = true; if (cells.length >= maxCells) break; }
-        const idx = ch === '0' ? 9 : (ch.charCodeAt(0) - 48 - 1);
-        const letter = 'abcdefghij'[idx];
-        cells.push(BRL_LETTER[letter] || 0);
-      } else if (ch >= 'A' && ch <= 'Z') {
-        numericMode = false;
-        cells.push(BRL_CAPITAL_PREFIX); if (cells.length >= maxCells) break;
-        cells.push(BRL_LETTER[ch.toLowerCase()] || 0);
-      } else if (ch >= 'a' && ch <= 'z') {
-        numericMode = false;
-        cells.push(BRL_LETTER[ch] || 0);
-      } else {
-        numericMode = false;
-        cells.push(BRL_PUNCT[ch] !== undefined ? BRL_PUNCT[ch] : 0);
-      }
-    }
-    // Pad to maxCells
-    while (cells.length < maxCells) cells.push(0);
-    return cells.slice(0, maxCells).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
-  }
-
-  // ============================================================
-  // DOT PAD ACTUAL DEVICE — graphic mode (multi-line)
-  // ============================================================
-  // Dot Pad graphic data: hex string, each byte = 1 cell (2×3 dot pattern).
-  // 30 cols × 10 rows = 300 cells = 600 hex chars.
-  function pushToDotpad() {
-    if (!state.dotpadConnected || !window.DotPad) return;
-    const hex = renderPuzzleAsGraphicHex();
-    try {
-      window.DotPad.sdk.displayGraphicData(hex);
-    } catch(e) { console.warn('[DotPad] graphic push failed:', e); }
-    // 20-cell 텍스트 라인 — 현재 상태 압축 표시
-    try {
-      const status = renderStatusText();
-      const txtHex = asciiToBrailleHex(status, DP_TEXT_CELLS);
-      if (window.DotPad.sdk.displayTextData) window.DotPad.sdk.displayTextData(txtHex);
-    } catch(e) { console.warn('[DotPad] text push failed:', e); }
-  }
-
-
-
-  // ============================================================
-  // BRAILLE NUMERIC patterns 
-  // 점자 숫자 = numeric prefix ⠼ (0x3C) + letter a-j for 1-0
-  // ============================================================
-  const BRL_NUM_PREFIX = 0x3C; // ⠼
-  const BRL_NUM = {
-    1: 0x01, 2: 0x03, 3: 0x09, 4: 0x19, 5: 0x11,
-    6: 0x0B, 7: 0x1B, 8: 0x13, 9: 0x0A, 0: 0x1A
-  };
-
-
-  // Build 30x10 grid hex from current puzzle — FULL PAD utilization
-  // Each puzzle cell expands to (cellW × cellH) Dot Pad cells based on puzzle size
-  function renderPuzzleAsGraphicHex() {
-    const cells = new Array(DP_W * DP_H).fill(0);
-  }
-  // ============================================================
-  // DOT PAD CONNECT
-  // ============================================================
-  function dotpadAvailable() {
-    if (window._dotpadLoadError) {
-      alert('Dot Pad SDK failed to load: ' + window._dotpadLoadError);
-      return false;
-    }
-    if (!(window.DotPad && window.DotPad.sdk)) {
-      alert('Dot Pad SDK still loading — please wait a moment and try again.');
-      return false;
-    }
-    return true;
-  }
-  
-  async function connectBle() {
-    if (!dotpadAvailable()) { alert('Dot Pad SDK not loaded'); return; }
-    try {
-      const device = await window.DotPad.scanner.startBleScan();
-      if (!device) return;
-      window.DotPad.sdk.setCallBack(onDotpadMessage, onDotpadKey);
-      const connected = await window.DotPad.sdk.connectBleDevice(device);
-      if (connected) {
-        state.dotpadConnected = true;
-        state.dotpadDevice = connected;
-        state.dotpadName = device.name || 'Dot Pad';
-        render();
-      }
-    } catch (e) {
-      alert('BLE failed: ' + (e.message || e));
-    }
-  }
-
-  async function connectUsb() {
-    if (!dotpadAvailable()) { alert('Dot Pad SDK not loaded'); return; }
-    try {
-      const device = await window.DotPad.scanner.startUsbScan();
-      if (!device) return;
-      window.DotPad.sdk.setCallBack(onDotpadMessage, onDotpadKey);
-      const connected = await window.DotPad.sdk.connectUsbDevice(device);
-      if (connected) {
-        state.dotpadConnected = true;
-        state.dotpadDevice = connected;
-        state.dotpadName = 'USB Dot Pad';
-        render();
-      }
-    } catch (e) {
-      alert('USB failed: ' + (e.message || e));
-    }
-  }
-
-  function onDotpadMessage(device, code, msg) {
-    if (!window.DotPad) return;
-    const DC = window.DotPad.DataCodes || {};
-    if (code === DC.Connected) {
-      state.dotpadConnected = true;
-      render();
-    } else if (code === DC.Disconnected) {
-      state.dotpadConnected = false;
-      render();
-    }
-  }
-
-  function render(){
-    dpSetBlock(new Array(60 * 40).fill(0x09), 10, 10, 60, 40, 0x12)
-  }
-
-  function onDotpadKey(device, keyCode, msg) {
-    return;
-  }
   </script>
 </html>
