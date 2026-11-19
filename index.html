@@ -22,7 +22,7 @@
     </div>
   </body>
 
-  <script> //adapted from the dotpad sdk guide but typescript --> javascript for faster browser time
+  <script type="module"> //adapted from the dotpad sdk guide but typescript --> javascript for faster browser time
     // Device interface (USB: target = SerialPort, BLE: target = BluetoothDevice)
     try {
       const { DotPadSDK, DotPadScanner, DotDevice, DataCodes, KeyCodes, DisplayMode}
@@ -69,7 +69,7 @@
       }, []);
 
       // Function to update device connection information
-      const updateDeviceConnection = async (device, connected) => {
+      async function updateDeviceConnection(device, connected) {
         if (connected) {
           const key = deviceKey(device);
           if (connectingKey) return; // 이미 다른 디바이스 연결 중 <-- already connected to another device
@@ -92,7 +92,7 @@
       };
 
       // Function to select a DotPad device (USB)
-      const handleSelectUsbDevice = async () => {
+      async function handleSelectUsbDevice(){
         const device = await dotpadscanner.current?.startUsbScan();
         if (device) {
           const deviceInfo = {
@@ -107,7 +107,7 @@
       };
 
       // Function to select a DotPad device (BLE)
-      const handleSelectBleDevice = async () => {
+      async function handleSelectBleDevice() {
         const device = await dotpadscanner.current?.startBleScan();
         if (device) {
           const deviceInfo = {
@@ -122,67 +122,67 @@
       };
 
       // Function to print full graphic area (300 cells) - all devices
-      const handleCell300FullPrint = async (hexData, displayMode) => {
+      async function handleCell300FullPrint(hexData, displayMode) {
           dotpadsdk.current?.displayGraphicData(hexData, null, displayMode);
       };
 
       // Function to print a portion of the graphic area (300 cells) - all devices
-      const handleCell300PartialPrint = async (lineId, cellIndex, hexData, displayMode = DisplayMode.GraphicMode) => {
+      async function handleCell300PartialPrint(lineId, cellIndex, hexData, displayMode){
           dotpadsdk.current?.displayLineData(lineId, cellIndex, hexData, displayMode);
       };
 
       // Function to reset the graphic area (300 cells) - all devices
-      const handleCell300Reset = async () => {
+      async function handleCell300Reset(){
           dotpadsdk.current?.displayGraphicData("00".repeat(300));
       };
 
       // Function to print the text area (20 cells) - all devices
-      const handleCell20Print = async (hexData) => {
+      async function handleCell20Print(hexData){
           dotpadsdk.current?.displayTextData(hexData);
       };
 
       // Function to reset the text area (20 cells) - all devices
-      const handleCell20Reset = async () => {
+      async function handleCell20Reset(){
           dotpadsdk.current?.displayTextData("00".repeat(20));
       };
 
       // Individual device functions
-      const handleDeviceCell300FullPrint = async (device, hexData, displayMode) => {
+      async function handleDeviceCell300FullPrint(device, hexData, displayMode){
         if (device.connectDevice) {
           dotpadsdk.current?.displayGraphicData(hexData, device.connectDevice, displayMode);
         }
       };
 
-      const handleDeviceCell300PartialPrint = async (device, lineId, cellIndex, hexData) => {
+      async function handleDeviceCell300PartialPrint(device, lineId, cellIndex, hexData){
         if (device.connectDevice) {
           dotpadsdk.current?.displayLineData(lineId, cellIndex, hexData, DisplayMode.GraphicMode, device.connectDevice);
         }
       };
 
-      const handleDeviceCell300Reset = async (device) => {
+      async function handleDeviceCell300Reset(device){
         if (device.connectDevice) {
           dotpadsdk.current?.displayGraphicData("00".repeat(300), device.connectDevice);
         }
       };
 
-      const handleDeviceCell20Print = async (device, hexData) => {
+      async function handleDeviceCell20Print(device, hexData){
         if (device.connectDevice) {
           dotpadsdk.current?.displayTextData(hexData, device.connectDevice);
         }
       };
 
-      const handleDeviceCell20Reset = async (device) => {
+      async function handleDeviceCell20Reset(device){
         if (device.connectDevice) {
           dotpadsdk.current?.displayTextData("00".repeat(20), device.connectDevice);
         }
       };
 
       // DotPad function key callback
-      const dotpadKeyCallback = (device, keyCode, keyMsg) => {
+      async function dotpadKeyCallback(device, keyCode, keyMsg){
         console.log("=> dotpad key code : " + keyCode + " msg : " + keyMsg);
       }
 
-      const dotpadMessageCallBack = (device, dataCode, msg) => {
+      async function dotpadMessageCallBack(device, dataCode, msg){
         switch (dataCode) {
           case DataCodes.Disconnected : {
             setDevices(devices => devices.map(d => d.connectDevice === device ? { ...d, connected: false, connectDevice: null } : d));
