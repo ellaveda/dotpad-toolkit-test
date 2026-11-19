@@ -214,9 +214,7 @@
     }
     return true;
   }
-  function openDpOverlay() { $('dp-overlay').classList.add('active'); }
-  function closeDpOverlay() { $('dp-overlay').classList.remove('active'); }
-
+  
   async function connectBle() {
     if (!dotpadAvailable()) { alert('Dot Pad SDK not loaded'); return; }
     try {
@@ -228,9 +226,6 @@
         state.dotpadConnected = true;
         state.dotpadDevice = connected;
         state.dotpadName = device.name || 'Dot Pad';
-        SFX.win();
-        closeDpOverlay();
-        speak('Dot Pad connected. F1 and F2 move cursor. F3 select. F4 toggle mark.');
         render();
       }
     } catch (e) {
@@ -249,9 +244,6 @@
         state.dotpadConnected = true;
         state.dotpadDevice = connected;
         state.dotpadName = 'USB Dot Pad';
-        SFX.win();
-        closeDpOverlay();
-        speak('Dot Pad connected. F1 and F2 move cursor. F3 select. F4 toggle mark.');
         render();
       }
     } catch (e) {
@@ -270,8 +262,13 @@
       render();
     }
   }
+
   function render(){
     dpSetBlock(new Array(60 * 40).fill(0x09), 10, 10, 60, 40, 0x12)
+  }
+
+  function onDotpadKey(device, keyCode, msg) {
+    return;
   }
   </script>
 </html>
