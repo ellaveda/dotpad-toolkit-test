@@ -56,8 +56,8 @@
         connectDevice: null,
       }
 
-      const dotpadsdk = window.DotPad.get(sdk);
-      const dotpadscanner = window.DotPad.get(scanner);
+      const dotpadsdk = window.DotPad[sdk];
+      const dotpadscanner = window.DotPad[scanner];
       //ella note -- less certain about these constants:
       const [devices, setDevices] = useState<Device>([]);
       /** BLE는 동시에 하나의 GATT 연산만 허용 → 연결 중인 디바이스 키 (연결 완료 시 초기화) */ //<-- Allows only one GATT operation at a time → Connected device key (initialized upon connection completion)
